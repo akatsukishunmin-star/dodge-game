@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>時間逆行ドッジ（理不尽）</title>
+  <style>
+    body {
+      margin: 0;
+      background: #080808;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    canvas {
+      background: radial-gradient(#222, #000);
+      margin-top: 10px;
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>💀 時間逆行ドッジ：理不尽モード</h1>
+  <p>← → 移動 / スペース：時間逆行（使いすぎると罠）</p>
+  <canvas id="game" width="400" height="500"></canvas>
+
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    let player = { x: 200, y: 450, r: 9 };
+    let balls = [];
+    let history = [];
+    let reverse = false;
+    let frame = 0;
+    let score = 0;
+    let gameOver = false;
+    let reverseHeat = 0; // 逆行の代償
+
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function spawnBall() {
+      const unfair = Math.random();
+      balls.push({
+        x: unfair < 0.3 ? player.x + (Math.random() * 40 - 20) : Math.random() * 400,
+        y: -10,
+        r: 6 + Math.random() * 6,
+        vy: 3 + Math.random() * 3 + score * 0.002,
+        vx: unfair < 0.2 ? (Math.random() * 4 - 2) : 0,
+        split: Math.random() < 0.25 // 分裂弾フラグ
+      });
+    }
+
+    function update() {
+      if (gameOver) return;
+
+      frame++;
+      if (frame % 15 === 0) spawnBall(); // 弾幕増量
+
+      if (keys['ArrowLeft']) player.x -= 4;
+      if (keys['ArrowRight']) player.x += 4;
+      player.x = Math.max(10, Math.min(390, player.x));
+
+      if (keys['Space'] && history.length > 0) {
+        reverse = true;
+        reverseHeat++;
+      } else {
+        reverse = false;
+        reverseHeat = Math.max(0, reverseHeat - 1);
+      }
+
+      if (reverse && history.length > 0) {
+        const prev = history.pop();
+        player = prev.player;
+        balls = prev.balls;
+        score = Math.max(0, score - 2);
+        if (reverseHeat > 120) {
+          // 逆行しすぎると未来から弾が来る
+          spawnBall(); spawnBall(); spawnBall();
+        }
+        return;
+      }
+
+      history.push({
+        player: { ...player },
+        balls: balls.map(b => ({ ...b }))
+      });
+      if (history.length > 200) history.shift();
+
+      balls.forEach(b => {
+        b.y += b.vy;
+        b.x += b.vx || 0;
+
+        // 一定位置で左右に分裂
+        if (b.split && !b.splitted && b.y > 200) {
+          b.splitted = true;
+          balls.push({ x: b.x, y: b.y, r: b.r - 2, vy: b.vy, vx: -3 });
+          balls.push({ x: b.x, y: b.y, r: b.r - 2, vy: b.vy, vx: 3 });
+        }
+      });
+      balls = balls.filter(b => b.y < 520);
+
+      for (const b of balls) {
+        const dx = b.x - player.x;
+        const dy = b.y - player.y;
+        if (Math.hypot(dx, dy) < b.r + player.r) {
+          gameOver = true;
+        }
+      }
+
+      score++;
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, 400, 500);
+
+      ctx.fillStyle = reverse ? 'orange' : 'cyan';
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'red';
+      balls.forEach(b => {
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      ctx.fillStyle = '#fff';
+      ctx.fillText('Score: ' + score, 10, 20);
+      ctx.fillText('Reverse Heat: ' + reverseHeat, 10, 40);
+
+      if (gameOver) {
+        ctx.fillStyle = 'yellow';
+        ctx.font = '24px sans-serif';
+        ctx.fillText('GAME OVER', 120, 250);
+        ctx.font = '14px sans-serif';
+        ctx.fillText('理不尽に耐えられなかった…', 110, 280);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    loop();
+  </script>
+</body>
+</html>
